@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; font-size: 13px; }
+    body { background: #1e1e1e; color: #e0e0e0; padding: 14px; user-select: none; }
+    .view { display: none; }
+    .view.active { display: block; }
+    label { display: block; margin-bottom: 4px; color: #aaa; font-size: 11px; }
+    input { width: 100%; padding: 6px 8px; background: #2d2d2d; border: 1px solid #444; border-radius: 4px; color: #e0e0e0; margin-bottom: 10px; }
+    button { width: 100%; padding: 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+    .btn-primary { background: #e5a00d; color: #000; font-weight: 600; }
+    .btn-primary:disabled { background: #555; color: #888; cursor: default; }
+    .btn-stop { background: #e53e3e; color: #fff; font-weight: 600; }
+    .session-item { display: flex; align-items: center; padding: 8px 6px; border-radius: 4px; cursor: pointer; margin-bottom: 4px; }
+    .session-item:hover { background: #2d2d2d; }
+    .session-item.selected { background: #2d4a2d; }
+    .session-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; margin-right: 8px; flex-shrink: 0; }
+    .session-item.selected .session-dot { background: #4ade80; }
+    select { width: 100%; padding: 6px 8px; background: #2d2d2d; border: 1px solid #444; border-radius: 4px; color: #e0e0e0; margin-bottom: 12px; }
+    .divider { border-top: 1px solid #333; margin: 12px 0; }
+    .footer-item { padding: 3px 0; color: #777; font-size: 11px; }
+    .footer-link { color: #aaa; cursor: pointer; padding: 4px 0; display: block; }
+    .footer-link:hover { color: #e0e0e0; }
+    .syncing-label { font-size: 12px; color: #4ade80; margin-bottom: 8px; }
+    .syncing-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #4ade80; margin-right: 5px; }
+    .syncing-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+    .error-msg { color: #f87171; font-size: 12px; margin-bottom: 8px; }
+    .empty-msg { color: #666; font-size: 12px; text-align: center; padding: 12px 0; }
+    h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div id="view-signin" class="view active">
+    <h3>Sign in to Plex</h3>
+    <label>Email</label>
+    <input type="email" id="email" placeholder="you@example.com">
+    <label>Password</label>
+    <input type="password" id="password">
+    <label>Server URL</label>
+    <input type="text" id="server-url" value="http://localhost:32400">
+    <div id="signin-error" class="error-msg"></div>
+    <button class="btn-primary" id="btn-signin">Sign in to Plex</button>
+  </div>
+
+  <div id="view-idle" class="view">
+    <h3>Active sessions</h3>
+    <div id="sessions-list"></div>
+    <label style="margin-top:10px;">Screen</label>
+    <select id="screen-select"></select>
+    <button class="btn-primary" id="btn-play" disabled>Play Plex session in sync</button>
+    <div class="divider"></div>
+    <div class="footer-item" id="footer-email"></div>
+    <div class="footer-item" id="footer-server"></div>
+    <div class="divider"></div>
+    <a class="footer-link" id="btn-download">Download from library…</a>
+    <a class="footer-link" id="btn-quit">Quit</a>
+  </div>
+
+  <div id="view-syncing" class="view">
+    <div class="syncing-label"><span class="syncing-dot"></span>Syncing</div>
+    <div class="syncing-title" id="sync-title"></div>
+
+    <label style="margin-top:6px;">Sync offset</label>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
+      <button id="btn-lag-minus" style="flex:1;padding:6px;background:#2d2d2d;border:1px solid #444;border-radius:4px;color:#e0e0e0;cursor:pointer;">−250 ms</button>
+      <div id="lag-value" style="flex:1;text-align:center;color:#e0e0e0;font-variant-numeric:tabular-nums;">…</div>
+      <button id="btn-lag-plus" style="flex:1;padding:6px;background:#2d2d2d;border:1px solid #444;border-radius:4px;color:#e0e0e0;cursor:pointer;">+250 ms</button>
+    </div>
+    <div style="font-size:10px;color:#888;margin-bottom:10px;">+ if mpv is behind, − if mpv is ahead</div>
+
+    <button class="btn-stop" id="btn-stop">Stop</button>
+    <div class="divider"></div>
+    <div class="footer-item" id="footer-email-s"></div>
+    <div class="footer-item" id="footer-server-s"></div>
+    <div class="divider"></div>
+    <a class="footer-link" id="btn-quit-s">Quit</a>
+  </div>
+
+  <script src="popover.js"></script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; font-size: 13px; }
+    body { background: #1e1e1e; color: #e0e0e0; padding: 20px; }
+    h2 { font-size: 15px; margin-bottom: 16px; }
+    label { display: block; color: #aaa; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; margin-top: 14px; }
+    select, input { width: 100%; padding: 7px 9px; background: #2d2d2d; border: 1px solid #444; border-radius: 4px; color: #e0e0e0; }
+    .search-row { display: flex; gap: 8px; margin-top: 4px; }
+    .search-row input { flex: 1; }
+    .search-row button { padding: 7px 14px; background: #444; border: none; border-radius: 4px; color: #e0e0e0; cursor: pointer; white-space: nowrap; }
+    .search-row button:hover { background: #555; }
+    .results { margin-top: 10px; max-height: 160px; overflow-y: auto; }
+    .result-item { padding: 8px; border-radius: 4px; cursor: pointer; margin-bottom: 2px; }
+    .result-item:hover { background: #2d2d2d; }
+    .result-item.selected { background: #2d4a2d; }
+    .result-meta { color: #888; font-size: 11px; margin-top: 2px; }
+    button.btn-download { width: 100%; margin-top: 16px; padding: 9px; background: #e5a00d; border: none; border-radius: 4px; color: #000; font-weight: 600; cursor: pointer; }
+    button.btn-download:disabled { background: #555; color: #888; cursor: default; }
+    .progress-track { height: 6px; background: #333; border-radius: 3px; margin-top: 14px; overflow: hidden; display: none; }
+    .progress-fill { height: 100%; background: #e5a00d; border-radius: 3px; width: 0%; transition: width 0.3s; }
+    .progress-label { margin-top: 6px; color: #aaa; font-size: 11px; }
+    .status-msg { margin-top: 10px; font-size: 12px; }
+    .status-msg.error { color: #f87171; }
+    .status-msg.done { color: #4ade80; }
+  </style>
+</head>
+<body>
+  <h2>Download from remote library</h2>
+
+  <label>Server</label>
+  <select id="server-select"><option>Loading…</option></select>
+
+  <label>Search</label>
+  <div class="search-row">
+    <input type="text" id="search-input" placeholder="Movie title…">
+    <button id="btn-search">Search</button>
+  </div>
+  <div class="results" id="results-list"></div>
+
+  <label>Save to</label>
+  <select id="section-select"><option>Loading…</option></select>
+
+  <button class="btn-download" id="btn-download" disabled>Download</button>
+
+  <div class="progress-track" id="progress-track">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+  <div class="progress-label" id="progress-label"></div>
+  <div class="status-msg" id="status-msg"></div>
+
+  <script src="download.js"></script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs/promises');
 
 const JSON_ACCEPT = { Accept: 'application/json' };
 
@@ -62,7 +63,6 @@ async function getFilePath(serverUrl, token, ratingKey) {
 
 function _orderedUris(connections) {
   const uris = [];
-  // Local connections first: try extracting raw IP before using .plex.direct hostname
   for (const c of connections.filter(c => c.local)) {
     const fromAddr = c.address?.match(/^(\d+-\d+-\d+-\d+)\./);
     if (fromAddr) uris.push(`http://${fromAddr[1].replace(/-/g, '.')}:${c.port}`);
@@ -70,26 +70,35 @@ function _orderedUris(connections) {
     if (fromUri) uris.push(`http://${fromUri[1].replace(/-/g, '.')}:${c.port}`);
     uris.push(c.uri);
   }
-  // Relay / remote connections as last resort
-  for (const c of connections.filter(c => !c.local)) uris.push(c.uri);
+  // For remote / public connections, try the bare IP first (avoids plex.direct DNS),
+  // then the original plex.direct HTTPS URI as fallback.
+  for (const c of connections.filter(c => !c.local)) {
+    if (c.address && /^\d+\.\d+\.\d+\.\d+$/.test(c.address)) {
+      uris.push(`http://${c.address}:${c.port}`);
+      uris.push(`https://${c.address}:${c.port}`);
+    }
+    uris.push(c.uri);
+  }
   return [...new Set(uris.filter(Boolean))];
 }
 
 async function getRemoteServers(token) {
-  const url = `https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1&X-Plex-Token=${token}`;
+  const url = `https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1&includeIPv6=1&X-Plex-Token=${token}`;
   const res = await fetch(url, {
     headers: { 'X-Plex-Client-Identifier': 'sauna-plex', Accept: 'application/json' },
   });
   if (!res.ok) return [];
   const data = await res.json();
-  return data
-    .filter(r => r.provides.includes('server') && !r.owned)
-    .map(r => ({
-      name: r.name,
-      clientIdentifier: r.clientIdentifier,
-      accessToken: r.accessToken,
-      uris: _orderedUris(r.connections),
-    }));
+  const servers = data.filter(r => r.provides.includes('server') && !r.owned);
+  for (const s of servers) {
+    console.log(`[plex] server "${s.name}" connections:`, JSON.stringify(s.connections, null, 2));
+  }
+  return servers.map(r => ({
+    name: r.name,
+    clientIdentifier: r.clientIdentifier,
+    accessToken: r.accessToken,
+    uris: _orderedUris(r.connections),
+  }));
 }
 
 async function getLocalSections(serverUrl, token) {
@@ -141,11 +150,97 @@ async function searchMoviesWithFallback(uris, accessToken, query) {
     try {
       return await searchMovies(uri, accessToken, query);
     } catch (err) {
-      console.log(`[plex] ${uri} failed: ${err.message}`);
+      const code = err.cause?.code || err.code || 'unknown';
+      console.log(`[plex] ${uri} failed: ${err.message} [${code}]`);
       lastErr = err;
     }
   }
   throw lastErr || new Error('All server connections failed');
+}
+
+// Probe each URI in parallel by hitting the lightweight /identity endpoint.
+// Returns the first URI that responds — much faster than sequential probing
+// when most URIs time out.
+async function findWorkingUri(uris, accessToken) {
+  const probes = uris.map((uri) =>
+    fetch(`${uri}/identity`, {
+      headers: authHeader(accessToken),
+      signal: AbortSignal.timeout(5000),
+    })
+      .then((res) => {
+        if (res.ok) {
+          console.log(`[plex] findWorkingUri: ${uri} OK`);
+          return uri;
+        }
+        console.log(`[plex] findWorkingUri: ${uri} returned ${res.status}`);
+        throw new Error(`HTTP ${res.status}`);
+      })
+      .catch((err) => {
+        if (!err.message?.startsWith('HTTP ')) {
+          const code = err.cause?.code || err.code || 'unknown';
+          console.log(`[plex] findWorkingUri: ${uri} failed: ${err.message} [${code}]`);
+        }
+        throw err;
+      })
+  );
+
+  try {
+    return await Promise.any(probes);
+  } catch {
+    return null;
+  }
+}
+
+function _filterMovies(movies, query) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return movies;
+  return movies.filter((movie) =>
+    `${movie.title || ''} ${movie.year || ''}`.toLowerCase().includes(q)
+  );
+}
+
+async function _readMovieCache(cachePath) {
+  try {
+    const raw = await fs.readFile(cachePath, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+async function _writeMovieCache(cachePath, data) {
+  await fs.mkdir(path.dirname(cachePath), { recursive: true });
+  await fs.writeFile(cachePath, JSON.stringify(data), 'utf8');
+}
+
+async function getCachedMovies(uris, accessToken, opts = {}) {
+  const {
+    cachePath,
+    cacheKey,
+    query = '',
+    forceRefresh = false,
+  } = opts;
+
+  if (!cachePath || !cacheKey) {
+    return searchMoviesWithFallback(uris, accessToken, query);
+  }
+
+  const cache = await _readMovieCache(cachePath);
+  const entry = cache[cacheKey];
+
+  if (!forceRefresh && entry?.movies) {
+    return _filterMovies(entry.movies, query);
+  }
+
+  try {
+    const movies = await searchMoviesWithFallback(uris, accessToken, '');
+    cache[cacheKey] = { updatedAt: Date.now(), movies };
+    await _writeMovieCache(cachePath, cache);
+    return _filterMovies(movies, query);
+  } catch (err) {
+    if (entry?.movies) return _filterMovies(entry.movies, query);
+    throw err;
+  }
 }
 
 async function triggerLibraryScan(serverUrl, token, sectionId) {
@@ -154,5 +249,6 @@ async function triggerLibraryScan(serverUrl, token, sectionId) {
 
 module.exports = {
   signIn, getSessions, getSessionPosition, getFilePath,
-  getRemoteServers, getLocalSections, searchMovies, searchMoviesWithFallback, triggerLibraryScan,
+  getRemoteServers, getLocalSections, searchMovies, searchMoviesWithFallback,
+  getCachedMovies, findWorkingUri, triggerLibraryScan,
 };

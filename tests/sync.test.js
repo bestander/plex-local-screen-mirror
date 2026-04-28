@@ -17,6 +17,9 @@ beforeEach(() => {
   mpv.quit.mockImplementation(() => {});
   plex.getFilePath.mockResolvedValue({ file: '/movies/film.mkv', partKey: '/library/parts/1' });
   plex.getSessionPosition.mockResolvedValue(5000);
+  plex.getSessions.mockResolvedValue([
+    { sessionKey: '1', state: 'playing', viewOffset: 5000 },
+  ]);
   const mockWs = { on: jest.fn(), close: jest.fn() };
   WebSocket.mockImplementation(() => mockWs);
   sync.reset();
@@ -58,6 +61,30 @@ test('handleEvent stopped calls mpv.quit', () => {
   expect(mpv.quit).toHaveBeenCalled();
 });
 
+test('handleEvent accepts numeric session key for paused event', () => {
+  mpv.isAlive.mockReturnValue(true);
+  sync.handleEvent({ type: 'playing', PlaySessionStateNotification: [
+    { sessionKey: 1, state: 'paused', viewOffset: 5000 },
+  ]}, '1');
+  expect(mpv.pause).toHaveBeenCalled();
+});
+
+test('handleEvent pauses on timeline notification type', () => {
+  mpv.isAlive.mockReturnValue(true);
+  sync.handleEvent({ type: 'timeline', PlaySessionStateNotification: [
+    { sessionKey: '1', state: 'paused', viewOffset: 5000 },
+  ]}, '1');
+  expect(mpv.pause).toHaveBeenCalled();
+});
+
+test('handleEvent accepts numeric session key for stopped event', () => {
+  mpv.isAlive.mockReturnValue(true);
+  sync.handleEvent({ type: 'playing', PlaySessionStateNotification: [
+    { sessionKey: 1, state: 'stopped', viewOffset: 0 },
+  ]}, '1');
+  expect(mpv.quit).toHaveBeenCalled();
+});
+
 test('handleEvent ignores events for other sessions', () => {
   mpv.isAlive.mockReturnValue(true);
   sync.handleEvent({ type: 'playing', PlaySessionStateNotification: [
@@ -69,15 +96,29 @@ test('handleEvent ignores events for other sessions', () => {
 test('correctDrift hard-seeks when drift exceeds 8s', async () => {
   mpv.isAlive.mockReturnValue(true);
   mpv.getPosition.mockResolvedValue(100.0);
-  plex.getSessionPosition.mockResolvedValue(110000);  // 10s ahead
+  plex.getSessions.mockResolvedValue([
+    { sessionKey: '1', state: 'playing', viewOffset: 110000 },
+  ]); // 10s ahead
   await sync.correctDrift('http://localhost:32400', 'tok', '1');
   expect(mpv.seek).toHaveBeenCalled();
+});
+
+test('correctDrift pauses when poll reports paused state', async () => {
+  mpv.isAlive.mockReturnValue(true);
+  mpv.getPosition.mockResolvedValue(100.0);
+  plex.getSessions.mockResolvedValue([
+    { sessionKey: '1', state: 'paused', viewOffset: 100000 },
+  ]);
+  await sync.correctDrift('http://localhost:32400', 'tok', '1');
+  expect(mpv.pause).toHaveBeenCalled();
 });
 
 test('correctDrift uses speed adjustment for moderate drift', async () => {
   mpv.isAlive.mockReturnValue(true);
   mpv.getPosition.mockResolvedValue(100.0);
-  plex.getSessionPosition.mockResolvedValue(102500);  // 2.5s drift (well above 500ms noise)
+  plex.getSessions.mockResolvedValue([
+    { sessionKey: '1', state: 'playing', viewOffset: 102500 },
+  ]); // 2.5s drift (well above 500ms noise)
   await sync.correctDrift('http://localhost:32400', 'tok', '1');
   expect(mpv.seek).not.toHaveBeenCalled();
   expect(mpv.setSpeed).toHaveBeenCalled();
@@ -90,7 +131,9 @@ test('correctDrift sets 1.0x speed when drift is in noise floor', async () => {
   sync.setDisplayLag(0);
   mpv.isAlive.mockReturnValue(true);
   mpv.getPosition.mockResolvedValue(100.0);
-  plex.getSessionPosition.mockResolvedValue(100100);  // 100ms drift, below 200ms noise
+  plex.getSessions.mockResolvedValue([
+    { sessionKey: '1', state: 'playing', viewOffset: 100100 },
+  ]); // 100ms drift, below 200ms noise
   await sync.correctDrift('http://localhost:32400', 'tok', '1');
   expect(mpv.seek).not.toHaveBeenCalled();
   expect(mpv.setSpeed).not.toHaveBeenCalled();

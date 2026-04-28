@@ -82,8 +82,9 @@ function _connectWebSocket(serverUrl, token) {
 }
 
 function handleEvent(data, sessionKey) {
-  if (data.type !== 'playing') return;
-  const notif = (data.PlaySessionStateNotification || []).find(n => n.sessionKey === sessionKey);
+  const targetSessionKey = String(sessionKey);
+  const notif = (data.PlaySessionStateNotification || [])
+    .find((n) => String(n.sessionKey) === targetSessionKey);
   if (!notif) return;
 
   const { state, viewOffset } = notif;
@@ -117,15 +118,37 @@ async function correctDrift(serverUrl, token, sessionKey) {
     console.log('[sync] tick: mpv not alive');
     return;
   }
-  if (_paused) {
-    console.log('[sync] tick: paused (skipping correction)');
+
+  const sessions = await plex.getSessions(serverUrl, token);
+  const session = sessions.find((s) => String(s.sessionKey) === String(sessionKey));
+  if (!session) {
+    console.log('[sync] tick: no Plex session found');
+    return;
+  }
+  const state = session.state || 'playing';
+  const rawPlexMs = session.viewOffset;
+
+  // Fallback state-sync path: if WebSocket events are dropped/absent, polling
+  // still reflects paused/buffering/stopped state and should control mpv.
+  if (state === 'paused' || state === 'buffering') {
+    if (!_paused && mpv.isAlive()) {
+      await mpv.pause();
+      _paused = true;
+      _buffering = state === 'buffering';
+    }
+    console.log(`[sync] tick: ${state} (skipping correction)`);
     return;
   }
 
-  const rawPlexMs = await plex.getSessionPosition(serverUrl, token, sessionKey);
-  if (rawPlexMs === null) {
-    console.log('[sync] tick: no Plex session found');
+  if (state === 'stopped') {
+    stop();
     return;
+  }
+
+  if (_paused || _buffering) {
+    await mpv.resume();
+    _paused = false;
+    _buffering = false;
   }
 
   // Plex's /sessions API only refreshes viewOffset every ~10s.

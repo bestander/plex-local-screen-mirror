@@ -19,6 +19,10 @@
     .session-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; margin-right: 8px; flex-shrink: 0; }
     .session-item.selected .session-dot { background: #4ade80; }
     select { width: 100%; padding: 6px 8px; background: #2d2d2d; border: 1px solid #444; border-radius: 4px; color: #e0e0e0; margin-bottom: 12px; }
+    .inline-row { display: flex; gap: 6px; align-items: center; margin-bottom: 12px; }
+    .inline-row select { margin-bottom: 0; flex: 1; }
+    .btn-inline { width: auto; padding: 6px 10px; background: #444; color: #e0e0e0; border: 1px solid #555; white-space: nowrap; }
+    .btn-inline:hover { background: #555; }
     .divider { border-top: 1px solid #333; margin: 12px 0; }
     .footer-item { padding: 3px 0; color: #777; font-size: 11px; }
     .footer-link { color: #aaa; cursor: pointer; padding: 4px 0; display: block; }
@@ -48,7 +52,10 @@
     <h3>Active sessions</h3>
     <div id="sessions-list"></div>
     <label style="margin-top:10px;">Screen</label>
-    <select id="screen-select"></select>
+    <div class="inline-row">
+      <select id="screen-select"></select>
+      <button class="btn-inline" id="btn-reload-screens">Reload</button>
+    </div>
     <button class="btn-primary" id="btn-play" disabled>Play Plex session in sync</button>
     <div class="divider"></div>
     <div class="footer-item" id="footer-email"></div>

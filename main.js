@@ -7,7 +7,10 @@ const { downloadFile } = require('./src/download');
 
 let tray, popoverWin, downloadWin;
 const config = createConfig(path.join(app.getPath('userData'), 'config.json'));
-const _serverUris = new Map(); // serverName -> [uris]
+const movieCachePath = path.join(app.getPath('userData'), 'movie-cache.json');
+const _serverUris = new Map();        // serverName -> [uris]
+const _serverWorkingUri = new Map();  // serverName -> last URI that responded
+const _serverTokens = new Map();      // serverName -> accessToken
 
 app.whenReady().then(() => {
   app.dock.hide();
@@ -107,15 +110,15 @@ ipcMain.handle('download:openWindow', () => {
 });
 
 ipcMain.handle('download:getRemoteServers', async () => {
-  const { token, serverUrl } = config.load();
+  const { token } = config.load();
   const remote = await plex.getRemoteServers(token);
   _serverUris.clear();
-  _serverUris.set('__local__', [serverUrl]);
-  for (const s of remote) _serverUris.set(s.name, s.uris);
-  const localEntry = { name: 'My Library (local)', uri: serverUrl, accessToken: token };
-  // Expose first URI as `uri` for the renderer dropdown
-  const remoteWithUri = remote.map(s => ({ ...s, uri: s.uris[0] }));
-  return [localEntry, ...remoteWithUri];
+  _serverTokens.clear();
+  for (const s of remote) {
+    _serverUris.set(s.name, s.uris);
+    _serverTokens.set(s.name, s.accessToken);
+  }
+  return remote.map(s => ({ ...s, uri: s.uris[0] }));
 });
 
 ipcMain.handle('download:getLocalSections', async () => {
@@ -123,14 +126,42 @@ ipcMain.handle('download:getLocalSections', async () => {
   return plex.getLocalSections(serverUrl, token);
 });
 
-ipcMain.handle('download:search', async (_, serverName, accessToken, query) => {
+ipcMain.handle('download:search', async (_, serverName, accessToken, query, opts = {}) => {
   const uris = _serverUris.get(serverName) || [serverName];
-  return plex.searchMoviesWithFallback(uris, accessToken, query);
+  return plex.getCachedMovies(uris, accessToken, {
+    cachePath: movieCachePath,
+    cacheKey: serverName,
+    query,
+    forceRefresh: Boolean(opts.forceRefresh),
+  });
 });
 
 ipcMain.handle('download:start', async (event, params) => {
-  const { url, savePath, sectionId } = params;
+  const { serverName, partKey, savePath, sectionId } = params;
   const { serverUrl, token } = config.load();
+  const accessToken = _serverTokens.get(serverName);
+  const uris = _serverUris.get(serverName);
+  if (!accessToken || !uris) {
+    event.sender.send('download:error', `Server '${serverName}' not loaded — open the download window again.`);
+    return;
+  }
+
+  // Use cached working URI if available, else probe.
+  let workingUri = _serverWorkingUri.get(serverName);
+  if (workingUri) {
+    console.log(`[download] using cached working URI: ${workingUri}`);
+  } else {
+    workingUri = await plex.findWorkingUri(uris, accessToken);
+    if (workingUri) _serverWorkingUri.set(serverName, workingUri);
+  }
+  if (!workingUri) {
+    event.sender.send('download:error',
+      `Cannot reach ${serverName}. Check that you're on the same network or the owner has remote access enabled.`);
+    return;
+  }
+
+  const url = `${workingUri}${partKey}?X-Plex-Token=${accessToken}&download=1`;
+  console.log(`[download] URL: ${url.replace(accessToken, '<token>')}`);
   try {
     await downloadFile({
       url, savePath,
@@ -139,6 +170,8 @@ ipcMain.handle('download:start', async (event, params) => {
     await plex.triggerLibraryScan(serverUrl, token, sectionId);
     event.sender.send('download:done');
   } catch (err) {
+    // Working URI failed mid-download — clear cache so next attempt re-probes.
+    _serverWorkingUri.delete(serverName);
     event.sender.send('download:error', err.message);
   }
 });

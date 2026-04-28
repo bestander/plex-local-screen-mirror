@@ -21,7 +21,7 @@ contextBridge.exposeInMainWorld('api', {
     openWindow: () => ipcRenderer.invoke('download:openWindow'),
     getRemoteServers: () => ipcRenderer.invoke('download:getRemoteServers'),
     getLocalSections: () => ipcRenderer.invoke('download:getLocalSections'),
-    search: (uri, token, query) => ipcRenderer.invoke('download:search', uri, token, query),
+    search: (uri, token, query, opts) => ipcRenderer.invoke('download:search', uri, token, query, opts),
     start: (params) => ipcRenderer.invoke('download:start', params),
     onProgress: (cb) => ipcRenderer.on('download:progress', (_, p) => cb(p)),
     onDone: (cb) => ipcRenderer.once('download:done', () => cb()),

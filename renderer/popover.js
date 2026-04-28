@@ -8,6 +8,15 @@ function showView(id) {
   document.getElementById(id).classList.add('active');
 }
 
+async function loadDisplays(preferredId) {
+  const displays = await window.api.plex.getDisplays();
+  const sel = document.getElementById('screen-select');
+  sel.innerHTML = displays.map((d) => {
+    const isSelected = d.id === preferredId || String(d.id) === String(preferredId);
+    return `<option value="${d.id}" ${isSelected ? 'selected' : ''}>${d.label}</option>`;
+  }).join('');
+}
+
 async function init() {
   const cfg = await window.api.config.load();
   if (!cfg.token) { showView('view-signin'); return; }
@@ -18,11 +27,7 @@ async function init() {
   document.getElementById('footer-server-s').textContent = cfg.serverUrl;
   document.getElementById('server-url').value = cfg.serverUrl;
 
-  const displays = await window.api.plex.getDisplays();
-  const sel = document.getElementById('screen-select');
-  sel.innerHTML = displays.map(d =>
-    `<option value="${d.id}" ${d.id === cfg.lastScreenId ? 'selected' : ''}>${d.label}</option>`
-  ).join('');
+  await loadDisplays(cfg.lastScreenId);
 
   showView('view-idle');
   loadSessions();
@@ -87,6 +92,11 @@ document.getElementById('btn-play').addEventListener('click', async () => {
     viewOffset: selectedViewOffset,
     screenId,
   });
+});
+
+document.getElementById('btn-reload-screens').addEventListener('click', async () => {
+  const currentId = document.getElementById('screen-select').value;
+  await loadDisplays(currentId);
 });
 
 document.getElementById('btn-stop').addEventListener('click', async () => {

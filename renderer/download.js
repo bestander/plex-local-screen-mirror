@@ -33,20 +33,30 @@ async function init() {
   serverSel.addEventListener('change', doSearch);
 }
 
-async function doSearch() {
+async function doSearch(forceRefresh = false) {
   const serverSel = document.getElementById('server-select');
   const opt = serverSel.options[serverSel.selectedIndex];
   if (!opt) return;
   const query = document.getElementById('search-input').value.trim();
 
   const list = document.getElementById('results-list');
-  list.innerHTML = `<div style="color:#888;padding:8px">${query ? 'Searching…' : 'Loading all movies…'}</div>`;
+  list.innerHTML = `<div style="color:#888;padding:8px">${
+    forceRefresh ? 'Refreshing movie cache…' : (query ? 'Searching…' : 'Loading all movies…')
+  }</div>`;
+  selectedMedia = null;
+  document.getElementById('btn-download').disabled = true;
 
   try {
-    const results = await window.api.download.search(opt.value, opt.dataset.token, query);
+    const results = await window.api.download.search(opt.value, opt.dataset.token, query, { forceRefresh });
     renderResults(results, opt.value, opt.dataset.token);
   } catch (err) {
-    list.innerHTML = `<div style="color:#f87171;padding:8px">Error: ${err.message}</div>`;
+    list.innerHTML =
+      `<div style="color:#f87171;padding:8px;line-height:1.5">` +
+      `Could not reach <b>${opt.text}</b>.<br>` +
+      `<span style="color:#888;font-size:11px">` +
+      `${err.message}<br>` +
+      `Check that you're on the same network as the server, or that the owner has remote access enabled.` +
+      `</span></div>`;
   }
 }
 
@@ -87,6 +97,7 @@ function renderResults(results, serverName, token) {
 }
 
 document.getElementById('btn-search').addEventListener('click', doSearch);
+document.getElementById('btn-reload-list').addEventListener('click', () => doSearch(true));
 
 document.getElementById('search-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') doSearch();
@@ -95,14 +106,10 @@ document.getElementById('search-input').addEventListener('keydown', (e) => {
 document.getElementById('btn-download').addEventListener('click', async () => {
   if (!selectedMedia) return;
 
-  // Resolve download URL: use the server's first URI from main process via IPC
-  const server = servers.find(s => s.name === selectedMedia.serverName);
-  const serverUri = server?.uri || selectedMedia.serverName;
   const sectionSel = document.getElementById('section-select');
   const sectionId = sectionSel.value;
   const sectionPath = sectionSel.options[sectionSel.selectedIndex].dataset.path;
   const savePath = `${sectionPath}/${selectedMedia.filename}`;
-  const url = `${serverUri}${selectedMedia.partKey}?X-Plex-Token=${selectedMedia.token}&download=1`;
 
   document.getElementById('btn-download').disabled = true;
   document.getElementById('progress-track').style.display = 'block';
@@ -128,7 +135,12 @@ document.getElementById('btn-download').addEventListener('click', async () => {
     document.getElementById('btn-download').disabled = false;
   });
 
-  await window.api.download.start({ url, savePath, sectionId });
+  await window.api.download.start({
+    serverName: selectedMedia.serverName,
+    partKey: selectedMedia.partKey,
+    savePath,
+    sectionId,
+  });
 });
 
 init();

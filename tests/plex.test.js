@@ -1,4 +1,7 @@
 const plex = require('../src/plex');
+const path = require('path');
+const os = require('os');
+const fs = require('fs/promises');
 
 beforeEach(() => {
   global.fetch = jest.fn();
@@ -126,4 +129,45 @@ test('searchMovies returns mapped results across sections', async () => {
   expect(results).toHaveLength(1);
   expect(results[0].title).toBe('Apollo 11');
   expect(results[0].media[0].videoResolution).toBe('4k');
+});
+
+test('getCachedMovies writes cache file and reuses it', async () => {
+  const cachePath = path.join(os.tmpdir(), `sauna-plex-cache-${Date.now()}.json`);
+  global.fetch
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        MediaContainer: { Directory: [{ key: '1', title: 'Movies', type: 'movie' }] },
+      }),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        MediaContainer: {
+          Metadata: [{
+            title: 'Apollo 11', year: 2019, ratingKey: '99',
+            Media: [{ Part: [{ key: '/library/parts/99/file.mkv', file: '/movies/Apollo.mkv', size: 6000000000 }] }],
+          }],
+        },
+      }),
+    });
+
+  const first = await plex.getCachedMovies(['http://192.168.1.10:32400'], 'tok2', {
+    cachePath,
+    cacheKey: 'unraid-01',
+    query: '',
+  });
+  expect(first).toHaveLength(1);
+  expect(global.fetch).toHaveBeenCalledTimes(2);
+
+  global.fetch.mockReset();
+  const second = await plex.getCachedMovies(['http://192.168.1.10:32400'], 'tok2', {
+    cachePath,
+    cacheKey: 'unraid-01',
+    query: 'apollo',
+  });
+  expect(second).toHaveLength(1);
+  expect(global.fetch).not.toHaveBeenCalled();
+
+  await fs.unlink(cachePath);
 });

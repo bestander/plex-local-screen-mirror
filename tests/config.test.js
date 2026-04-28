@@ -5,7 +5,7 @@ const { createConfig } = require('../src/config');
 
 let tmpPath;
 beforeEach(() => {
-  tmpPath = path.join(os.tmpdir(), `sauna-plex-test-${Date.now()}.json`);
+  tmpPath = path.join(os.tmpdir(), `plex-local-screen-mirror-test-${Date.now()}.json`);
 });
 afterEach(() => {
   if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);

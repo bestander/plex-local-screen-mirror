@@ -16,7 +16,7 @@ async function signIn(email, password) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'X-Plex-Client-Identifier': 'sauna-plex',
+      'X-Plex-Client-Identifier': 'plex-local-screen-mirror',
       'X-Plex-Product': 'Sauna Plex',
       Accept: 'application/json',
     },
@@ -85,7 +85,7 @@ function _orderedUris(connections) {
 async function getRemoteServers(token) {
   const url = `https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1&includeIPv6=1&X-Plex-Token=${token}`;
   const res = await fetch(url, {
-    headers: { 'X-Plex-Client-Identifier': 'sauna-plex', Accept: 'application/json' },
+    headers: { 'X-Plex-Client-Identifier': 'plex-local-screen-mirror', Accept: 'application/json' },
   });
   if (!res.ok) return [];
   const data = await res.json();

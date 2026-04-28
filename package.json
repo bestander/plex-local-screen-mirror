@@ -1,5 +1,5 @@
 {
-  "name": "sauna-plex",
+  "name": "plex-local-screen-mirror",
   "version": "1.0.0",
   "description": "Dual-screen Plex sync menu bar app",
   "main": "main.js",
@@ -25,7 +25,7 @@
     }
   },
   "build": {
-    "appId": "com.sauna-plex.app",
+    "appId": "com.plex-local-screen-mirror.app",
     "productName": "Sauna Plex",
     "mac": {
       "category": "public.app-category.entertainment",

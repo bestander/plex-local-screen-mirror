@@ -1,4 +1,4 @@
-# sauna-plex
+# plex-local-screen-mirror
 
 A macOS menu-bar app that mirrors a Plex playback session running on a remote
 device (TV, projector, phone) onto a second screen attached to your Mac, keeping

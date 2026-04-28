@@ -132,7 +132,7 @@ test('searchMovies returns mapped results across sections', async () => {
 });
 
 test('getCachedMovies writes cache file and reuses it', async () => {
-  const cachePath = path.join(os.tmpdir(), `sauna-plex-cache-${Date.now()}.json`);
+  const cachePath = path.join(os.tmpdir(), `plex-local-screen-mirror-cache-${Date.now()}.json`);
   global.fetch
     .mockResolvedValueOnce({
       ok: true,

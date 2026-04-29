@@ -81,7 +81,7 @@ npm start
 npm run build
 ```
 
-Produces `dist/Sauna Plex-1.0.0-universal.dmg`.
+Produces `dist/Plex Local Screen Mirror-1.0.0-universal.dmg`.
 
 ## Layout
 

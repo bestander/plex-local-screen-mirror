@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('api', {
   sync: {
     start: (params) => ipcRenderer.invoke('sync:start', params),
     stop: () => ipcRenderer.invoke('sync:stop'),
+    startProbe: (params) => ipcRenderer.invoke('sync:startProbe', params),
+    stopProbe: () => ipcRenderer.invoke('sync:stopProbe'),
     onStatus: (cb) => ipcRenderer.on('sync:status', (_, data) => cb(data)),
     getDisplayLag: () => ipcRenderer.invoke('sync:getDisplayLag'),
     nudgeDisplayLag: (delta) => ipcRenderer.invoke('sync:nudgeDisplayLag', delta),
@@ -27,5 +29,9 @@ contextBridge.exposeInMainWorld('api', {
     onDone: (cb) => ipcRenderer.once('download:done', () => cb()),
     onError: (cb) => ipcRenderer.once('download:error', (_, msg) => cb(msg)),
   },
-  app: { quit: () => ipcRenderer.invoke('app:quit') },
+  app: {
+    quit: () => ipcRenderer.invoke('app:quit'),
+    getLaunchAtLogin: () => ipcRenderer.invoke('app:getLaunchAtLogin'),
+    setLaunchAtLogin: (enabled) => ipcRenderer.invoke('app:setLaunchAtLogin', enabled),
+  },
 });

@@ -1,6 +1,8 @@
 const WebSocket = require('ws');
 const plex = require('./plex');
 const mpv = require('./mpv');
+const { createProbe } = require('./probe');
+const { pollPlayerTimeline } = require('./playerTimeline');
 
 let _sessionKey = null;
 let _ratingKey = null;
@@ -16,6 +18,8 @@ let _backoff = 1000;
 let _lastPlexRaw = null;       // last raw value Plex reported
 let _lastPlexUpdateAt = 0;     // wall-clock time when that raw value was first seen
 let _currentSpeed = 1.0;       // last speed we sent to mpv
+let _probe = null;
+let _probeOpts = { enablePlayerTimeline: false };
 
 // Player buffer / network lag. The remote device buffers ahead before displaying,
 // so its visible frame leads the playhead position it reports to Plex. mpv reads
@@ -23,11 +27,11 @@ let _currentSpeed = 1.0;       // last speed we sent to mpv
 // actually on screen on the remote device. Adjustable at runtime via IPC.
 let _displayLagMs = 1500;
 
-function setDisplayLag(ms) { _displayLagMs = Math.max(0, Math.min(8000, ms)); }
+function setDisplayLag(ms) { _displayLagMs = Math.max(-8000, Math.min(8000, ms)); }
 function getDisplayLag() { return _displayLagMs; }
 
 async function start(opts) {
-  const { serverUrl, token, sessionKey, ratingKey, viewOffset, screenIndex, onStatus } = opts;
+  const { serverUrl, token, sessionKey, ratingKey, viewOffset, screenIndex, onStatus, probe } = opts;
   _sessionKey = sessionKey;
   _ratingKey = ratingKey;
   _screenIndex = screenIndex;
@@ -39,6 +43,12 @@ async function start(opts) {
   _lastPlexRaw = null;
   _lastPlexUpdateAt = 0;
   _currentSpeed = 1.0;
+  _probe = createProbe({
+    enabled: Boolean(probe?.enabled),
+    logPath: probe?.logPath,
+    sessionKey,
+  });
+  _probeOpts = { enablePlayerTimeline: Boolean(probe?.enablePlayerTimeline) };
 
   // Fetch fresh position
   const freshMs = await plex.getSessionPosition(serverUrl, token, sessionKey);
@@ -83,16 +93,33 @@ function _connectWebSocket(serverUrl, token) {
 
 function handleEvent(data, sessionKey) {
   const targetSessionKey = String(sessionKey);
-  const notif = (data.PlaySessionStateNotification || [])
+  // Field finding (real Android TV stream): Plex notifications arrive under
+  // NotificationContainer.PlaySessionStateNotification, not only top-level
+  // PlaySessionStateNotification. Parse both forms so WS updates are not missed.
+  const container = data?.NotificationContainer || null;
+  const notifications = data?.PlaySessionStateNotification
+    || container?.PlaySessionStateNotification
+    || [];
+  const notif = notifications
     .find((n) => String(n.sessionKey) === targetSessionKey);
   if (!notif) return;
 
   const { state, viewOffset } = notif;
   console.log(`[sync] event: state=${state} viewOffset=${viewOffset}ms`);
+  _probe?.record({
+    source: 'ws',
+    sessionKey,
+    eventType: 'PlaySessionStateNotification',
+    state,
+    positionMs: typeof viewOffset === 'number' ? viewOffset : null,
+    raw: notif,
+  });
 
   // Seed the position model from the WebSocket's fresh viewOffset.
   // This is more current than what /status/sessions returns when polled,
   // because it arrives the moment Plex receives the heartbeat from the client.
+  // Probe finding: WS jitter (~93ms abs) is far lower than /sessions (~1750ms),
+  // so WS should remain the primary timing signal when available.
   if (typeof viewOffset === 'number' && state === 'playing') {
     _lastPlexRaw = viewOffset;
     _lastPlexUpdateAt = Date.now();
@@ -127,6 +154,35 @@ async function correctDrift(serverUrl, token, sessionKey) {
   }
   const state = session.state || 'playing';
   const rawPlexMs = session.viewOffset;
+  if (_probeOpts.enablePlayerTimeline && session.playerAddress && session.playerPort) {
+    const playerUrl = `http://${session.playerAddress}:${session.playerPort}`;
+    const timeline = await pollPlayerTimeline({ playerUrl, token, sessionKey });
+    if (timeline.ok) {
+      await _probe?.record({
+        source: 'playerTimeline',
+        sessionKey,
+        state: timeline.state,
+        positionMs: timeline.positionMs,
+        endpointStatus: timeline.endpointStatus,
+        raw: timeline.raw,
+      });
+    } else {
+      await _probe?.record({
+        source: 'playerTimeline',
+        sessionKey,
+        failureReason: timeline.failureReason,
+        endpointStatus: timeline.endpointStatus,
+        raw: null,
+      });
+    }
+  }
+  await _probe?.record({
+    source: 'sessions',
+    sessionKey,
+    state,
+    positionMs: Number.isFinite(rawPlexMs) ? rawPlexMs : null,
+    raw: session,
+  });
 
   // Fallback state-sync path: if WebSocket events are dropped/absent, polling
   // still reflects paused/buffering/stopped state and should control mpv.
@@ -208,6 +264,9 @@ function stop() {
   _lastPlexRaw = null;
   _lastPlexUpdateAt = 0;
   _currentSpeed = 1.0;
+  _probe?.stop();
+  _probe = null;
+  _probeOpts = { enablePlayerTimeline: false };
   _onStatus?.({ state: 'idle' });
 }
 

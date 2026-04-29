@@ -17,7 +17,7 @@ async function signIn(email, password) {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'X-Plex-Client-Identifier': 'plex-local-screen-mirror',
-      'X-Plex-Product': 'Sauna Plex',
+      'X-Plex-Product': 'Plex Local Screen Mirror',
       Accept: 'application/json',
     },
     body: body.toString(),
@@ -42,6 +42,9 @@ async function getSessions(serverUrl, token) {
       state: item.Player?.state || 'playing',
       partKey: item.Media?.[0]?.Part?.[0]?.key,
       file: item.Media?.[0]?.Part?.[0]?.file,
+      playerAddress: item.Player?.address || null,
+      playerPort: item.Player?.port || null,
+      playerMachineIdentifier: item.Player?.machineIdentifier || null,
     }));
   } catch { return []; }
 }

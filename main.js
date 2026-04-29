@@ -8,6 +8,7 @@ const { downloadFile } = require('./src/download');
 let tray, popoverWin, downloadWin;
 const config = createConfig(path.join(app.getPath('userData'), 'config.json'));
 const movieCachePath = path.join(app.getPath('userData'), 'movie-cache.json');
+const probeLogPath = path.join(app.getPath('userData'), 'logs', 'probes', 'probe-log.ndjson');
 const _serverUris = new Map();        // serverName -> [uris]
 const _serverWorkingUri = new Map();  // serverName -> last URI that responded
 const _serverTokens = new Map();      // serverName -> accessToken
@@ -24,7 +25,7 @@ app.on('window-all-closed', () => {});
 function createTray() {
   const icon = nativeImage.createFromPath(path.join(__dirname, 'assets/icon-idle.png'));
   tray = new Tray(icon);
-  tray.setToolTip('Sauna Plex');
+  tray.setToolTip('Plex Local Screen Mirror');
   tray.on('click', togglePopover);
 }
 
@@ -76,12 +77,18 @@ ipcMain.handle('plex:getDisplays', () =>
 ipcMain.handle('sync:start', async (_, params) => {
   const { sessionKey, ratingKey, viewOffset, screenId } = params;
   const { serverUrl, token } = config.load();
+  const probeConfig = config.get('probeConfig') || {};
   const displays = screen.getAllDisplays();
   const screenIndex = displays.findIndex(d => d.id === screenId);
   config.set('lastScreenId', screenId);
   await sync.start({
     serverUrl, token, sessionKey, ratingKey, viewOffset,
     screenIndex: screenIndex === -1 ? 0 : screenIndex,
+    probe: {
+      enabled: Boolean(probeConfig.enabled),
+      enablePlayerTimeline: Boolean(probeConfig.enablePlayerTimeline),
+      logPath: probeLogPath,
+    },
     onStatus: (status) => {
       setTrayIcon(status.state === 'syncing' ? 'syncing' : 'idle');
       popoverWin?.webContents.send('sync:status', status);
@@ -91,6 +98,20 @@ ipcMain.handle('sync:start', async (_, params) => {
 
 ipcMain.handle('sync:stop', () => sync.stop());
 
+ipcMain.handle('sync:startProbe', (_, probeOpts = {}) => {
+  const next = {
+    enabled: Boolean(probeOpts.enabled),
+    enablePlayerTimeline: Boolean(probeOpts.enablePlayerTimeline),
+  };
+  config.set('probeConfig', next);
+  return { ok: true, ...next, logPath: probeLogPath };
+});
+
+ipcMain.handle('sync:stopProbe', () => {
+  config.set('probeConfig', { enabled: false, enablePlayerTimeline: false });
+  return { ok: true };
+});
+
 ipcMain.handle('sync:getDisplayLag', () => sync.getDisplayLag());
 
 ipcMain.handle('sync:nudgeDisplayLag', (_, deltaMs) => {
@@ -98,6 +119,15 @@ ipcMain.handle('sync:nudgeDisplayLag', (_, deltaMs) => {
   sync.setDisplayLag(next);
   config.set('displayLagMs', sync.getDisplayLag());
   return sync.getDisplayLag();
+});
+
+ipcMain.handle('app:getLaunchAtLogin', () => {
+  return app.getLoginItemSettings().openAtLogin;
+});
+
+ipcMain.handle('app:setLaunchAtLogin', (_, enabled) => {
+  app.setLoginItemSettings({ openAtLogin: Boolean(enabled) });
+  return app.getLoginItemSettings().openAtLogin;
 });
 
 ipcMain.handle('download:openWindow', () => {

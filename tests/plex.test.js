@@ -33,7 +33,13 @@ test('getSessions maps Metadata to session objects', async () => {
           year: 2019,
           ratingKey: '42',
           viewOffset: 5000,
-          Player: { title: 'Living Room TV', state: 'playing' },
+          Player: {
+            title: 'Living Room TV',
+            state: 'playing',
+            address: '192.168.1.20',
+            port: 32500,
+            machineIdentifier: 'android-tv-1',
+          },
           Media: [{ Part: [{ key: '/library/parts/7865/file.mkv', file: '/movies/Apollo.mkv', size: 5000000000 }] }],
         }],
       },
@@ -45,6 +51,9 @@ test('getSessions maps Metadata to session objects', async () => {
   expect(sessions[0].deviceName).toBe('Living Room TV');
   expect(sessions[0].viewOffset).toBe(5000);
   expect(sessions[0].file).toBe('/movies/Apollo.mkv');
+  expect(sessions[0].playerAddress).toBe('192.168.1.20');
+  expect(sessions[0].playerPort).toBe(32500);
+  expect(sessions[0].playerMachineIdentifier).toBe('android-tv-1');
 });
 
 test('getSessions returns empty array on error', async () => {

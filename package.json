@@ -6,6 +6,7 @@
   "scripts": {
     "start": "electron .",
     "test": "jest",
+    "analyze:probe": "node scripts/analyze-probe-log.js",
     "create-icons": "node scripts/create-icons.js",
     "build": "electron-builder"
   },
@@ -26,7 +27,7 @@
   },
   "build": {
     "appId": "com.plex-local-screen-mirror.app",
-    "productName": "Sauna Plex",
+    "productName": "Plex Local Screen Mirror",
     "mac": {
       "category": "public.app-category.entertainment",
       "target": [{ "target": "dmg", "arch": ["universal"] }]

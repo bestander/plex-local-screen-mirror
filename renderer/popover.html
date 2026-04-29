@@ -57,6 +57,25 @@
       <button class="btn-inline" id="btn-reload-screens">Reload</button>
     </div>
     <button class="btn-primary" id="btn-play" disabled>Play Plex session in sync</button>
+    <div style="margin-top:10px;padding:8px;border:1px solid #333;border-radius:4px;">
+      <label style="margin-bottom:6px;">Probe mode</label>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+        <input type="checkbox" id="probe-enabled" style="width:auto;margin:0;">
+        <span style="font-size:12px;color:#bbb;">Capture WS + sessions signals</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" id="probe-player-timeline" style="width:auto;margin:0;">
+        <span style="font-size:12px;color:#bbb;">Try player timeline polling</span>
+      </div>
+      <div id="probe-status" style="margin-top:6px;font-size:11px;color:#888;">Probe: OFF</div>
+    </div>
+    <div style="margin-top:10px;padding:8px;border:1px solid #333;border-radius:4px;">
+      <label style="margin-bottom:6px;">Startup</label>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" id="launch-at-login" style="width:auto;margin:0;">
+        <span style="font-size:12px;color:#bbb;">Start Plex Local Screen Mirror at login</span>
+      </div>
+    </div>
     <div class="divider"></div>
     <div class="footer-item" id="footer-email"></div>
     <div class="footer-item" id="footer-server"></div>

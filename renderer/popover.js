@@ -3,6 +3,33 @@ let selectedRatingKey = null;
 let selectedViewOffset = 0;
 let pollInterval = null;
 
+function renderProbeStatus(cfg) {
+  const statusEl = document.getElementById('probe-status');
+  if (!cfg?.enabled) {
+    statusEl.textContent = 'Probe: OFF';
+    return;
+  }
+  const suffix = cfg.enablePlayerTimeline ? ' (with player timeline)' : '';
+  statusEl.textContent = `Probe: ON${suffix}`;
+}
+
+async function saveProbeConfig() {
+  const enabled = document.getElementById('probe-enabled').checked;
+  const enablePlayerTimeline = document.getElementById('probe-player-timeline').checked;
+  if (enabled) {
+    const cfg = await window.api.sync.startProbe({ enabled, enablePlayerTimeline });
+    renderProbeStatus(cfg);
+    return;
+  }
+  await window.api.sync.stopProbe();
+  renderProbeStatus({ enabled: false, enablePlayerTimeline: false });
+}
+
+async function loadLaunchAtLoginState() {
+  const enabled = await window.api.app.getLaunchAtLogin();
+  document.getElementById('launch-at-login').checked = Boolean(enabled);
+}
+
 function showView(id) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -26,6 +53,11 @@ async function init() {
   document.getElementById('footer-email-s').textContent = cfg.email || '';
   document.getElementById('footer-server-s').textContent = cfg.serverUrl;
   document.getElementById('server-url').value = cfg.serverUrl;
+  const probeCfg = cfg.probeConfig || { enabled: false, enablePlayerTimeline: false };
+  document.getElementById('probe-enabled').checked = Boolean(probeCfg.enabled);
+  document.getElementById('probe-player-timeline').checked = Boolean(probeCfg.enablePlayerTimeline);
+  renderProbeStatus(probeCfg);
+  await loadLaunchAtLoginState();
 
   await loadDisplays(cfg.lastScreenId);
 
@@ -84,6 +116,7 @@ document.getElementById('btn-signin').addEventListener('click', async () => {
 
 document.getElementById('btn-play').addEventListener('click', async () => {
   if (!selectedSessionKey) return;
+  await saveProbeConfig();
   clearInterval(pollInterval);
   const screenId = parseInt(document.getElementById('screen-select').value, 10);
   await window.api.sync.start({
@@ -92,6 +125,13 @@ document.getElementById('btn-play').addEventListener('click', async () => {
     viewOffset: selectedViewOffset,
     screenId,
   });
+});
+
+document.getElementById('probe-enabled').addEventListener('change', saveProbeConfig);
+document.getElementById('probe-player-timeline').addEventListener('change', async () => {
+  const enabled = document.getElementById('probe-enabled').checked;
+  if (!enabled) return;
+  await saveProbeConfig();
 });
 
 document.getElementById('btn-reload-screens').addEventListener('click', async () => {
@@ -126,6 +166,11 @@ document.getElementById('btn-lag-minus').addEventListener('click', async () => {
 document.getElementById('btn-lag-plus').addEventListener('click', async () => {
   await window.api.sync.nudgeDisplayLag(250);
   refreshLagDisplay();
+});
+
+document.getElementById('launch-at-login').addEventListener('change', async (event) => {
+  const next = await window.api.app.setLaunchAtLogin(event.target.checked);
+  event.target.checked = Boolean(next);
 });
 
 document.getElementById('btn-download').addEventListener('click', () => window.api.download.openWindow());
